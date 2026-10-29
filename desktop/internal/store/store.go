@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"database/sql"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -469,6 +471,114 @@ func (s *Store) MarkOpened(id string) error {
 	defer s.mu.Unlock()
 	_, err := s.db.Exec("UPDATE profiles SET last_opened_at=? WHERE id=?", now(), id)
 	return err
+}
+
+// duplicateName strips a trailing " (copy)" / " (copy N)" from name.
+func duplicateName(name string, n int) string {
+	base := name
+	// Strip an existing " (copy)" or " (copy N)" tail so repeated duplicates
+	// of duplicates keep incrementing on the same base name.
+	if strings.HasSuffix(name, " (copy)") {
+		base = strings.TrimSuffix(name, " (copy)")
+	} else if i := strings.LastIndex(name, " (copy "); i >= 0 && strings.HasSuffix(name, ")") {
+		base = name[:i]
+	}
+	if n <= 1 {
+		return base + " (copy)"
+	}
+	return fmt.Sprintf("%s (copy %d)", base, n)
+}
+
+// nextDuplicateName returns the first unused "base (copy [N])" name.
+func (s *Store) nextDuplicateName(base string) (string, error) {
+	for n := 1; ; n++ {
+		name := duplicateName(base, n)
+		var one int
+		if err := s.db.QueryRow("SELECT 1 FROM profiles WHERE name = ?", name).Scan(&one); errors.Is(err, sql.ErrNoRows) {
+			return name, nil
+		} else if err != nil {
+			return "", err
+		}
+	}
+}
+
+// randomFingerprintSeedText returns a fresh uint64 seed as exact decimal text,
+// the same format chromixOptions.fingerprintSeed requires.
+func randomFingerprintSeedText() (string, error) {
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", err
+	}
+	value := binary.BigEndian.Uint64(b[:]) | 1 // never 0: 0 disables fingerprinting
+	return strconv.FormatUint(value, 10), nil
+}
+
+// ProfileDuplicate copies a profile's configuration into a fresh identity:
+// new id, empty data dir, rotated fingerprint seeds, and an auto-incrementing
+// "(copy)" name. Login state and cookies are intentionally not cloned.
+func (s *Store) ProfileDuplicate(id string) (map[string]any, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	src, err := getProfile(s.db, id)
+	if err != nil {
+		return nil, err
+	}
+	if src == nil {
+		return nil, fmt.Errorf("profile not found: %s", id)
+	}
+	p, err := cloneMap(src)
+	if err != nil {
+		return nil, err
+	}
+	newId, err := newID()
+	if err != nil {
+		return nil, err
+	}
+	name, err := s.nextDuplicateName(text(src["name"]))
+	if err != nil {
+		return nil, err
+	}
+	stamp := now()
+	p["id"] = newId
+	p["name"] = name
+	p["dataDir"] = filepath.Join(s.DataDir, "profiles", newId)
+	p["createdAt"] = stamp
+	p["updatedAt"] = stamp
+	p["lastOpenedAt"] = nil
+	if fp, ok := p["fingerprint"].(map[string]any); ok {
+		fp["seed"] = newId
+	}
+	if co, ok := p["chromixOptions"].(map[string]any); ok {
+		mode, _ := co["fingerprintMode"].(string)
+		seed, hasSeed := co["fingerprintSeed"].(string)
+		if (mode == "fixed" || mode == "custom") && hasSeed && seed != "" {
+			if fresh, err := randomFingerprintSeedText(); err == nil {
+				co["fingerprintSeed"] = fresh
+			} else {
+				return nil, err
+			}
+		}
+	}
+	if err = validateProfile(p); err != nil {
+		return nil, err
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	dir := text(p["dataDir"])
+	if err = os.Mkdir(dir, 0700); err != nil {
+		return nil, err
+	}
+	if err = insertProfile(tx, p); err == nil {
+		err = tx.Commit()
+	}
+	if err != nil {
+		os.RemoveAll(dir)
+		return nil, err
+	}
+	return cloneMap(p)
 }
 
 // SetProxyCountry clears the cached country when country is empty.

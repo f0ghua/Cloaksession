@@ -199,7 +199,7 @@ func (s *Service) Invoke(ctx context.Context, command string, args map[string]an
 		s.stopCompanion(text(args["id"]))
 	}
 	switch command {
-	case "profiles_delete", "profiles_launch", "profiles_close", "profiles_export_archive":
+	case "profiles_delete", "profiles_launch", "profiles_close", "profiles_export_archive", "profiles_duplicate":
 		unlock := s.lockProfile(text(args["id"]))
 		defer unlock()
 	}
@@ -215,6 +215,8 @@ func (s *Service) Invoke(ctx context.Context, command string, args map[string]an
 		return profiles, nil
 	case "profiles_get":
 		return s.store.ProfileGet(text(args["id"]))
+	case "profiles_duplicate":
+		return s.store.ProfileDuplicate(text(args["id"]))
 	case "profiles_create":
 		input, err := objectArg(args, "input")
 		if err != nil {

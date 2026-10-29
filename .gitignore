@@ -36,6 +36,9 @@
 /desktop/*.syso
 wails-*.log
 
+# Local portable Windows build output (cross-compiled, run over Samba)
+/Cloaksession-portable/
+
 # Python build helpers
 __pycache__/
 *.pyc

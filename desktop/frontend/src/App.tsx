@@ -285,6 +285,18 @@ export function App(): JSX.Element {
     await refresh();
   }
 
+  async function duplicateProfile(id: string): Promise<void> {
+    try {
+      const copy = await profilesApi.duplicate(id);
+      showToast(`Duplicated as “${copy.name}”`);
+    } catch (e) {
+      const msg = typeof e === "string" ? e : (e as Error).message ?? String(e);
+      showToast(`Duplicate failed: ${msg}`);
+      return;
+    }
+    await refresh();
+  }
+
   async function closeProfile(id: string): Promise<void> {
     // close() may reject if graceful shutdown throws, but the driver's
     // finally still emits "closed" (which drives its own refresh), so a
@@ -439,6 +451,7 @@ export function App(): JSX.Element {
                   onLaunch={launchProfile}
                   onStop={closeProfile}
                   onExport={(id) => setModal({ kind: "export-passphrase", profileId: id })}
+                  onDuplicate={duplicateProfile}
                   onDelete={(id) => setModal({ kind: "delete-confirm", profileId: id })}
                 />
               )}

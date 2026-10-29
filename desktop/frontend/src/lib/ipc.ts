@@ -64,6 +64,12 @@ export const profiles = {
   /** `profiles_delete` → `()`. */
   delete: (id: ProfileId): Promise<void> => invoke<void>("profiles_delete", { id }),
 
+  /** `profiles_duplicate` → `Profile`. Copies configuration into a fresh
+   * identity: new id, empty data dir, rotated fingerprint seeds, and an
+   * auto-incrementing "(copy)" name. */
+  duplicate: (id: ProfileId): Promise<Profile> =>
+    invoke<Profile>("profiles_duplicate", { id }),
+
   /** `profiles_launch` → `LaunchedProfile`. */
   launch: (id: ProfileId): Promise<LaunchedProfile> =>
     invoke<LaunchedProfile>("profiles_launch", { id }),

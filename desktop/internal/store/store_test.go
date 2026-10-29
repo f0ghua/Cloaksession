@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -179,6 +180,113 @@ func TestLegacyDatabaseMigration(t *testing.T) {
 }
 
 const arbitraryOptions = `{"false":false,"null":null,"empty":{},"list":[],"nested":{"future":[1,"text",false,null]},"max":18446744073709551615,"precise":0.123456789012345678901234567890,"exponent":1.234567890123456789e+40}`
+
+func TestProfileDuplicate(t *testing.T) {
+	s := openTestStore(t)
+	options := mustJSON(t, `{"fingerprintMode": "fixed", "fingerprintSeed": "12345678901234567", "launchOptions": {"headless": false}}`)
+	src, err := s.ProfileCreate(map[string]any{
+		"name": "My Shop", "notes": "keep me", "tags": []string{"work"},
+		"proxy": map[string]any{"type": "socks5", "host": "proxy.example", "port": 1080},
+		"chromixOptions": options,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srcID := text(src["id"])
+	if err := s.MarkOpened(srcID); err != nil {
+		t.Fatal(err)
+	}
+
+	dup, err := s.ProfileDuplicate(srcID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dupID := text(dup["id"])
+	if dupID == srcID || len(dupID) != 36 {
+		t.Fatal(dupID)
+	}
+	// Identity fields rotate.
+	if dup["name"] != "My Shop (copy)" {
+		t.Fatal(dup["name"])
+	}
+	if dup["dataDir"] != filepath.Join(s.DataDir, "profiles", dupID) {
+		t.Fatal(dup["dataDir"])
+	}
+	if info, err := os.Stat(text(dup["dataDir"])); err != nil || !info.IsDir() {
+		t.Fatal("duplicate data dir missing")
+	}
+	if dup["lastOpenedAt"] != nil || dup["createdAt"] == src["createdAt"] {
+		t.Fatal(dup["lastOpenedAt"], dup["createdAt"])
+	}
+	// Fingerprint seed rotates to the new id.
+	srcFp, dupFp := src["fingerprint"].(map[string]any), dup["fingerprint"].(map[string]any)
+	if dupFp["seed"] != dupID || srcFp["seed"] == dupFp["seed"] {
+		t.Fatal(dupFp["seed"])
+	}
+	// Other fingerprint fields stay.
+	if dupFp["locale"] != srcFp["locale"] || dupFp["timezone"] != srcFp["timezone"] {
+		t.Fatal("fingerprint fields not preserved")
+	}
+	// Chromix fixed seed rotates; the rest of the options are preserved.
+	dupOptions := dup["chromixOptions"].(map[string]any)
+	if dupOptions["fingerprintSeed"] == options["fingerprintSeed"] || dupOptions["fingerprintSeed"] == "" {
+		t.Fatal(dupOptions["fingerprintSeed"])
+	}
+	if _, err := strconv.ParseUint(text(dupOptions["fingerprintSeed"]), 10, 64); err != nil {
+		t.Fatal(dupOptions["fingerprintSeed"])
+	}
+	if dupOptions["fingerprintMode"] != "fixed" {
+		t.Fatal(dupOptions["fingerprintMode"])
+	}
+	if _, ok := dupOptions["launchOptions"]; !ok {
+		t.Fatal("chromix options not preserved")
+	}
+	// Config fields are inherited.
+	if dup["notes"] != "keep me" || dup["proxy"] == nil || dup["tags"] == nil {
+		t.Fatal(dup["notes"], dup["proxy"], dup["tags"])
+	}
+
+	// Name chain: duplicating either the source or the copy increments.
+	second, err := s.ProfileDuplicate(srcID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second["name"] != "My Shop (copy 2)" {
+		t.Fatal(second["name"])
+	}
+	fromCopy, err := s.ProfileDuplicate(dupID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fromCopy["name"] != "My Shop (copy 3)" {
+		t.Fatal(fromCopy["name"])
+	}
+
+	// Random chromix mode keeps its options untouched.
+	random, err := s.ProfileCreate(map[string]any{"name": "RND", "chromixOptions": map[string]any{"fingerprintMode": "random"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rDup, err := s.ProfileDuplicate(text(random["id"]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r := rDup["chromixOptions"].(map[string]any); r["fingerprintMode"] != "random" {
+		t.Fatal(r["fingerprintMode"])
+	}
+
+	// Missing profile errors; source is untouched by all duplicates above.
+	if _, err = s.ProfileDuplicate("nope"); err == nil {
+		t.Fatal("expected error")
+	}
+	kept, err := s.ProfileGet(srcID)
+	if err != nil || kept == nil {
+		t.Fatal(err)
+	}
+	if kept["name"] != "My Shop" {
+		t.Fatal(kept["name"])
+	}
+}
 
 func TestProfilesJSONPrecisionAndLifecycle(t *testing.T) {
 	s := openTestStore(t)
