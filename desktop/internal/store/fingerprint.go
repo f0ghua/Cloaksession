@@ -84,6 +84,7 @@ var localeCatalog = []struct {
 	{"id-ID", "Bahasa Indonesia", []string{"Asia/Jakarta"}},
 	{"th-TH", "ไทย (ประเทศไทย)", []string{"Asia/Bangkok"}},
 	{"vi-VN", "Tiếng Việt", []string{"Asia/Ho_Chi_Minh"}},
+	{"en-PH", "English (Philippines)", []string{"Asia/Manila"}},
 }
 
 func FingerprintLocales() any {
@@ -149,7 +150,7 @@ func FingerprintLocaleForCountry(country string) any {
 		}
 	}
 	switch code {
-	case "SG", "MY", "PH", "HK", "SE", "NO", "DK", "FI", "IS":
+	case "SG", "MY", "HK", "SE", "NO", "DK", "FI", "IS":
 		return "en-GB"
 	case "AT", "CH", "LI":
 		return "de-DE"

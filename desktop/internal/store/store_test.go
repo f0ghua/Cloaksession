@@ -401,7 +401,7 @@ func TestFingerprintCatalogAndReconcile(t *testing.T) {
 	if err := validateFingerprint(fp); err != nil {
 		t.Fatal(err)
 	}
-	if len(FingerprintDevices().([]map[string]any)) != 19 || len(FingerprintLocales().([]map[string]any)) != 20 {
+	if len(FingerprintDevices().([]map[string]any)) != 19 || len(FingerprintLocales().([]map[string]any)) != 21 {
 		t.Fatal("catalog mismatch")
 	}
 	for _, l := range FingerprintLocales().([]map[string]any) {
@@ -409,7 +409,7 @@ func TestFingerprintCatalogAndReconcile(t *testing.T) {
 			t.Fatal(l)
 		}
 	}
-	for country, want := range map[string]any{" sg ": "en-GB", "CH": "de-DE", "MX": "es-ES", "AE": "ar-SA", "UA": "ru-RU", "ZZ": nil} {
+	for country, want := range map[string]any{" sg ": "en-GB", "CH": "de-DE", "MX": "es-ES", "AE": "ar-SA", "UA": "ru-RU", "PH": "en-PH", "ZZ": nil} {
 		if got := FingerprintLocaleForCountry(country); got != want {
 			t.Fatalf("%s: %v != %v", country, got, want)
 		}

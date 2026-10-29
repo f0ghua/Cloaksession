@@ -18,8 +18,8 @@ const modes: { value: FingerprintMode; label: string; description: string }[] = 
 ];
 const choices: { id: string; label: string; values: string[] }[] = [
   { id: "platform", label: "Platform", values: ["macos", "windows", "linux"] },
-  { id: "locale", label: "Language", values: ["en-US", "en-GB", "zh-CN", "ja-JP", "de-DE", "fr-FR"] },
-  { id: "timezone", label: "Timezone", values: ["America/New_York", "America/Los_Angeles", "Europe/London", "Europe/Berlin", "Asia/Shanghai", "Asia/Tokyo", "UTC"] },
+  { id: "locale", label: "Language", values: ["en-US", "en-GB", "en-PH", "zh-CN", "ja-JP", "de-DE", "fr-FR"] },
+  { id: "timezone", label: "Timezone", values: ["America/New_York", "America/Los_Angeles", "Europe/London", "Europe/Berlin", "Asia/Shanghai", "Asia/Tokyo", "Asia/Manila", "UTC"] },
   { id: "hardware-concurrency", label: "CPU cores", values: ["2", "4", "8", "16"] },
   { id: "device-memory", label: "Memory (GB)", values: ["2", "4", "8", "16", "32"] },
 ];
