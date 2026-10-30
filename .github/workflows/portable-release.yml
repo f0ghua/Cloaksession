@@ -62,6 +62,14 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "base=$BASE" >> "$GITHUB_OUTPUT"
 
+      # The Go embed directive in main.go requires frontend/dist to exist
+      # before any go test/build, so build the frontend first.
+      - name: Build frontend assets (go:embed prerequisite)
+        working-directory: desktop/frontend
+        run: |
+          npm ci --legacy-peer-deps
+          npm run build
+
       - name: Test Go backend (mirrors the upstream Windows build job)
         working-directory: desktop
         run: go test -count=1 -mod=readonly ./...
