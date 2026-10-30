@@ -101,10 +101,10 @@ jobs:
         shell: pwsh
         run: |
           $tag = "${{ steps.tag.outputs.tag }}"
-          $asset = "desktop/build/dist/Cloaksession-$tag-windows-amd64-portable.zip"
-          New-Item -ItemType Directory -Force -Path "desktop/build/dist" | Out-Null
+          $asset = "$PWD\desktop\build\dist\Cloaksession-$tag-windows-amd64-portable.zip"
+          New-Item -ItemType Directory -Force -Path "$PWD\desktop\build\dist" | Out-Null
           Push-Location "desktop/build/bin"
-          7z a -tzip "$PWD\..\..\dist\Cloaksession-$tag-windows-amd64-portable.zip" "Cloaksession.exe" "Cloaksession-Portable.bat" "resources"
+          7z a -tzip "$asset" "Cloaksession.exe" "Cloaksession-Portable.bat" "resources"
           Pop-Location
           if ($LASTEXITCODE -ne 0) { throw "7z failed" }
           Get-Item $asset | Select-Object FullName, Length
