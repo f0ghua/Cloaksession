@@ -79,13 +79,33 @@ jobs:
       - name: Build portable tree
         run: python scripts/build.py
 
-      - name: Zip portable distribution
+      - name: Write portable launcher script
+        shell: pwsh
+        run: |
+          $launcher = @'
+          @echo off
+          rem Portable launcher: keeps all profile data beside the executable
+          rem instead of %LOCALAPPDATA%\com.cloaksession.browser.
+          setlocal
+          set "CLOAKSESSION_DATA_DIR=%~dp0data"
+          rem Optional bundled Node.js for the Chromix engine / reverse debugging:
+          rem unpack a node distribution into tools\node and it is picked up.
+          if exist "%~dp0tools\node\node.exe" set "PATH=%~dp0tools\node;%PATH%"
+          start "" "%~dp0Cloaksession.exe" %*
+          endlocal
+          '@ -replace '(?m)^\s+', ''
+          Set-Content -Path "desktop/build/bin/Cloaksession-Portable.bat" -Value $launcher -Encoding ascii
+          Get-Content "desktop/build/bin/Cloaksession-Portable.bat"
+
+      - name: Zip portable distribution (flat layout, exe at zip root)
         shell: pwsh
         run: |
           $tag = "${{ steps.tag.outputs.tag }}"
           $asset = "desktop/build/dist/Cloaksession-$tag-windows-amd64-portable.zip"
           New-Item -ItemType Directory -Force -Path "desktop/build/dist" | Out-Null
-          7z a -tzip "$asset" "desktop/build/bin/Cloaksession.exe" "desktop/build/bin/resources"
+          Push-Location "desktop/build/bin"
+          7z a -tzip "$PWD\..\..\dist\Cloaksession-$tag-windows-amd64-portable.zip" "Cloaksession.exe" "Cloaksession-Portable.bat" "resources"
+          Pop-Location
           if ($LASTEXITCODE -ne 0) { throw "7z failed" }
           Get-Item $asset | Select-Object FullName, Length
           "asset=$asset" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
@@ -99,6 +119,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'zip listing failed' }
           foreach ($path in @(
               'Cloaksession.exe',
+              'Cloaksession-Portable.bat',
               'resources\playwright\bridge.mjs',
               'resources\reverse\bridge.mjs',
               'resources\reverse\node_modules\js-reverse-mcp\package.json',
@@ -125,9 +146,12 @@ jobs:
           - Commit: \`${SHA:0:10}\`
           - Contents: \`Cloaksession.exe\` + \`resources/\` (playwright, reverse debugging, companion)
 
-          Usage: unzip anywhere and run \`Cloaksession.exe\`. Windows only (amd64).
+          Usage: unzip anywhere (flat layout - the exe sits at the top level).
+          Run \`Cloaksession-Portable.bat\` to keep all profile data in a \`data\`
+          folder beside the executable instead of \`%LOCALAPPDATA%\`, or run
+          \`Cloaksession.exe\` directly for the default per-machine data location.
           The embedded WebView2 bootstrapper prompts if the Runtime is missing.
-          Chromix engine and reverse debugging additionally need Node.js 20+ on the
-          target machine. Data is stored per-machine in
-          \`%LOCALAPPDATA%\\com.cloaksession.browser\` unless \`CLOAKSESSION_DATA_DIR\`
-          is set. Login state is never bundled - use .mzar export/import to move it."
+          Chromix engine and reverse debugging additionally need Node.js 20+;
+          the launcher prepends \`tools\\node\` to PATH if you unpack a Node
+          distribution there. Login state is never bundled - use .mzar
+          export/import to move it."
